@@ -1,0 +1,4 @@
+train=pd.read_csv('/kaggle/input/nyc-taxi-trip-duration/train.zip',parse_dates=['pickup_datetime','dropoff_datetime'],compression='zip')
+test=pd.read_csv('/kaggle/input/nyc-taxi-trip-duration/test.zip',parse_dates=['pickup_datetime'],compression='zip')
+
+train['log_trip_duration']=np.log1p(train['trip_duration'])
