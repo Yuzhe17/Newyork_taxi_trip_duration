@@ -1,0 +1,134 @@
+#positions
+from sklearn.decomposition import PCA
+coor=np.vstack([train[['pickup_longitude','pickup_latitude']].values,
+         train[['dropoff_longitude','dropoff_latitude']].values,
+         test[['pickup_longitude','pickup_latitude']].values,
+         test[['dropoff_longitude','dropoff_latitude']].values])
+pca=PCA(n_components=2)
+pca=pca.fit(coor)
+train['pickup_pca0']=pca.transform(train[['pickup_longitude','pickup_latitude']])[:,0]
+train['pickup_pca1']=pca.transform(train[['pickup_longitude','pickup_latitude']])[:,1]
+train['dropoff_pca0']=pca.transform(train[['dropoff_longitude','dropoff_latitude']])[:,0]
+train['dropoff_pca1']=pca.transform(train[['dropoff_longitude','dropoff_latitude']])[:,1]
+test['pickup_pca0']=pca.transform(test[['pickup_longitude','pickup_latitude']])[:,0]
+test['pickup_pca1']=pca.transform(test[['pickup_longitude','pickup_latitude']])[:,1]
+test['dropoff_pca0']=pca.transform(test[['dropoff_longitude','pickup_latitude']])[:,0]
+test['dropoff_pca1']=pca.transform(test[['dropoff_longitude','dropoff_latitude']])[:,1]
+#datetime feature
+train['pickup_weekday']=train['pickup_datetime'].map(lambda x:x.weekday())
+train['pickup_hour_weekofyear'] = train['pickup_datetime'].map(lambda x:x.weekofyear)                                                                  
+train['pickup_hour']=train['pickup_datetime'].map(lambda x:x.hour)
+train['pickup_minute']=train['pickup_datetime'].map(lambda x:x.minute)
+train['pickup_day']=train['pickup_datetime'].map(lambda x:x.day)
+train['pickup_month']=train['pickup_datetime'].map(lambda x:x.month)
+train.loc[:, 'pickup_week_hour'] = train['pickup_weekday'] * 24 + train['pickup_hour']
+train.loc[:, 'pickup_dt'] = (train['pickup_datetime'] - train['pickup_datetime'].min()).map(lambda x:x.total_seconds())
+#train['pickup_date']=train['pickup_datetime'].map(lambda x:x.date)
+
+
+test['pickup_weekday']=test['pickup_datetime'].map(lambda x:x.weekday())
+test['pickup_hour_weekofyear'] = test['pickup_datetime'].map(lambda x:x.weekofyear)
+test['pickup_hour']=test['pickup_datetime'].map(lambda x:x.hour)
+test['pickup_minute']=test['pickup_datetime'].map(lambda x:x.minute)
+test['pickup_day']=test['pickup_datetime'].map(lambda x:x.day)
+test['pickup_month']=test['pickup_datetime'].map(lambda x:x.month)
+test.loc[:, 'pickup_week_hour'] = train['pickup_weekday'] * 24 + train['pickup_hour']
+test.loc[:, 'pickup_dt'] = (test['pickup_datetime'] - test['pickup_datetime'].min()).map(lambda x:x.total_seconds())
+#test['pickup_date']=test['pickup_datetime'].map(lambda x:x.date)
+#
+def haversine_array(lat1, lng1, lat2, lng2):
+    lat1, lng1, lat2, lng2 = map(np.radians, (lat1, lng1, lat2, lng2))
+    AVG_EARTH_RADIUS = 6371  # in km
+    lat = lat2 - lat1
+    lng = lng2 - lng1
+    d = np.sin(lat * 0.5) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(lng * 0.5) ** 2
+    h = 2 * AVG_EARTH_RADIUS * np.arcsin(np.sqrt(d))
+    return h
+
+def dummy_manhattan_distance(lat1, lng1, lat2, lng2):
+    a = haversine_array(lat1, lng1, lat1, lng2)
+    b = haversine_array(lat1, lng1, lat2, lng1)
+    return a + b
+
+def bearing_array(lat1, lng1, lat2, lng2):
+    AVG_EARTH_RADIUS = 6371  # in km
+    lng_delta_rad = np.radians(lng2 - lng1)
+    lat1, lng1, lat2, lng2 = map(np.radians, (lat1, lng1, lat2, lng2))
+    y = np.sin(lng_delta_rad) * np.cos(lat2)
+    x = np.cos(lat1) * np.sin(lat2) - np.sin(lat1) * np.cos(lat2) * np.cos(lng_delta_rad)
+    return np.degrees(np.arctan2(y, x))
+
+train.loc[:, 'distance_haversine'] = haversine_array(train['pickup_latitude'].values, train['pickup_longitude'].values, train['dropoff_latitude'].values, train['dropoff_longitude'].values)
+train.loc[:, 'distance_dummy_manhattan'] = dummy_manhattan_distance(train['pickup_latitude'].values, train['pickup_longitude'].values, train['dropoff_latitude'].values, train['dropoff_longitude'].values)
+train.loc[:, 'direction'] = bearing_array(train['pickup_latitude'].values, train['pickup_longitude'].values, train['dropoff_latitude'].values, train['dropoff_longitude'].values)
+train.loc[:, 'pca_manhattan'] = np.abs(train['dropoff_pca1'] - train['pickup_pca1']) + np.abs(train['dropoff_pca0'] - train['pickup_pca0'])
+
+test.loc[:, 'distance_haversine'] = haversine_array(test['pickup_latitude'].values, test['pickup_longitude'].values, test['dropoff_latitude'].values, test['dropoff_longitude'].values)
+test.loc[:, 'distance_dummy_manhattan'] = dummy_manhattan_distance(test['pickup_latitude'].values, test['pickup_longitude'].values, test['dropoff_latitude'].values, test['dropoff_longitude'].values)
+test.loc[:, 'direction'] = bearing_array(test['pickup_latitude'].values, test['pickup_longitude'].values, test['dropoff_latitude'].values, test['dropoff_longitude'].values)
+test.loc[:, 'pca_manhattan'] = np.abs(test['dropoff_pca1'] - test['pickup_pca1']) + np.abs(test['dropoff_pca0'] - test['pickup_pca0'])
+
+train.loc[:, 'center_latitude'] = (train['pickup_latitude'].values + train['dropoff_latitude'].values) / 2
+train.loc[:, 'center_longitude'] = (train['pickup_longitude'].values + train['dropoff_longitude'].values) / 2
+test.loc[:, 'center_latitude'] = (test['pickup_latitude'].values + test['dropoff_latitude'].values) / 2
+test.loc[:, 'center_longitude'] = (test['pickup_longitude'].values + test['dropoff_longitude'].values) / 2
+#speed
+train.loc[:, 'avg_speed_h'] = 1000 * train['distance_haversine'] / train['trip_duration']
+train.loc[:, 'avg_speed_m'] = 1000 * train['distance_dummy_manhattan'] / train['trip_duration']
+
+train.loc[:, 'pickup_lat_bin'] = np.round(train['pickup_latitude'], 2)
+train.loc[:, 'pickup_long_bin'] = np.round(train['pickup_longitude'], 2)
+train.loc[:, 'center_lat_bin'] = np.round(train['center_latitude'], 2)
+train.loc[:, 'center_long_bin'] = np.round(train['center_longitude'], 2)
+train.loc[:, 'pickup_dt_bin'] = (train['pickup_dt'] // (3 * 3600))
+test.loc[:, 'pickup_lat_bin'] = np.round(test['pickup_latitude'], 2)
+test.loc[:, 'pickup_long_bin'] = np.round(test['pickup_longitude'], 2)
+test.loc[:, 'center_lat_bin'] = np.round(test['center_latitude'], 2)
+test.loc[:, 'center_long_bin'] = np.round(test['center_longitude'], 2)
+test.loc[:, 'pickup_dt_bin'] = (test['pickup_dt'] // (3 * 3600))
+
+#clustering
+from sklearn.cluster import MiniBatchKMeans
+mbk=MiniBatchKMeans(n_clusters=100, batch_size=10000)
+sample_id=np.random.permutation(len(coor))[:500000]
+mbk.fit(coor[sample_id])
+train['pickup_cluster']=mbk.predict(train[['pickup_longitude','pickup_latitude']])
+train['dropoff_cluster']=mbk.predict(train[['dropoff_longitude','dropoff_latitude']])
+test['pickup_cluster']=mbk.predict(test[['pickup_longitude','pickup_latitude']])
+test['dropoff_cluster']=mbk.predict(test[['dropoff_longitude','dropoff_latitude']])
+
+for gby_cols in [['center_lat_bin', 'center_long_bin'],
+                 ['pickup_hour', 'center_lat_bin', 'center_long_bin'],
+                 ['pickup_hour', 'pickup_cluster'],  ['pickup_hour', 'dropoff_cluster'],
+                 ['pickup_cluster', 'dropoff_cluster']]:
+    coord_speed = train.groupby(gby_cols).mean()[['avg_speed_h']].reset_index()
+    coord_count = train.groupby(gby_cols).count()[['id']].reset_index()
+    coord_stats = pd.merge(coord_speed, coord_count, on=gby_cols)
+    coord_stats = coord_stats[coord_stats['id'] > 100]
+    coord_stats.columns = gby_cols + ['avg_speed_h_%s' % '_'.join(gby_cols), 'cnt_%s' %  '_'.join(gby_cols)]
+    train = pd.merge(train, coord_stats, how='left', on=gby_cols)
+    test = pd.merge(test, coord_stats, how='left', on=gby_cols)
+
+train['store_and_fwd_flag'] = 1 * (train.store_and_fwd_flag.values == 'Y')
+test['store_and_fwd_flag'] = 1 * (test.store_and_fwd_flag.values == 'Y')
+
+import datetime as dt
+feature_names = list(train.columns)
+print(np.setdiff1d(train.columns, test.columns))
+do_not_use_for_training = ['id', 'log_trip_duration', 'pickup_datetime', 'dropoff_datetime',
+                           'trip_duration',
+                            'pickup_date', 'avg_speed_h','avg_speed_m',
+                           'pickup_lat_bin', 'pickup_long_bin',
+                           'center_lat_bin', 'center_long_bin',
+                           'pickup_dt_bin', 'pickup_datetime_group']
+feature_names = [f for f in train.columns if f not in do_not_use_for_training]
+# print(feature_names)
+print('We have %i features.' % len(feature_names))
+train[feature_names].count()
+y = np.log(train['trip_duration'].values + 1)
+
+train_x=train[feature_names]
+test_x=test[feature_names]
+
+train_x.fillna(train_x.mean(axis=0),axis=0,inplace=True)
+test_x.fillna(test_x.mean(axis=0),axis=0,inplace=True)
