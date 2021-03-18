@@ -1,4 +1,18 @@
-train=pd.read_csv('/kaggle/input/nyc-taxi-trip-duration/train.zip',parse_dates=['pickup_datetime','dropoff_datetime'],compression='zip')
-test=pd.read_csv('/kaggle/input/nyc-taxi-trip-duration/test.zip',parse_dates=['pickup_datetime'],compression='zip')
+train=pd.read_csv('./data/train.zip',parse_dates=['pickup_datetime','dropoff_datetime'],compression='zip')
+test=pd.read_csv('./data/test.zip',parse_dates=['pickup_datetime'],compression='zip')
 
 train['log_trip_duration']=np.log1p(train['trip_duration'])
+
+#plot the distribution of trip duration
+train['log_trip_duration'] = np.log(train['trip_duration'].values + 1)
+plt.hist(train['log_trip_duration'].values, bins=100)
+plt.xlabel('log(trip_duration)')
+plt.ylabel('number of train records')
+plt.show()
+#plot the number of records in each pick_date of both the train and test dataset
+plt.plot(train.groupby('pickup_date').count()[['id']], 'o-', label='train')
+plt.plot(test.groupby('pickup_date').count()[['id']], 'o-', label='test')
+plt.title('Train and test period complete overlap.')
+plt.legend(loc=0)
+plt.ylabel('number of records')
+plt.show()
